@@ -21,6 +21,14 @@ Dieses Repository enthält eine einfache Flask-Webapp:
 
 Die bestehende `ci.yml` soll nicht ersetzt werden. Sie dient als Referenz für Linting, Tests und Build. Für die Praxisaufträge erstellt ihr zusätzlich `ci_cd.yml`.
 
+Für die Musterlösung gibt es zusätzlich eine Docker-Variante:
+
+```text
+.github/workflows/ci_cd_docker.yml
+```
+
+Diese Pipeline zeigt die vollständige Lösung für Praxisauftrag 2 mit Docker Compose und Gunicorn.
+
 ## Gemeinsame Voraussetzung für beide Praxisaufträge
 
 Bevor ihr die App deployt, erstellt ihr lokal eine EC2-Instanz mit der mitgelieferten Infrastruktur im Ordner `infra/`.
@@ -63,12 +71,6 @@ AWS Access Key ID: <Access Key>
 AWS Secret Access Key: <Secret Key>
 Default region name [us-east-1]:
 Default output format [json]:
-```
-
-Setzt danach den Session Token aus dem Learner Lab:
-
-```bash
-aws configure set aws_session_token "<Session Token>"
 ```
 
 Stellt danach sicher, dass eure Credentials aktiv sind:
@@ -440,6 +442,7 @@ Am Ende von Praxisauftrag 2 sollen vorhanden sein:
 - `.github/workflows/ci_cd.yml`
 - `Dockerfile`
 - `docker-compose.yml`
+- optional als Musterlösung: `.github/workflows/ci_cd_docker.yml`
 - App startet mit Gunicorn
 - App läuft auf EC2 in Docker Compose
 - Datenbank ist persistent
