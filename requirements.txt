@@ -1,0 +1,20 @@
+# TechStyle dependencies
+Flask
+Flask-SQLAlchemy
+Jinja2
+Werkzeug
+click
+itsdangerous
+MarkupSafe
+SQLAlchemy
+gunicorn
+python-dotenv
+requests
+
+# Testing
+pytest
+pytest-mock==3.15.0
+pytest-cov
+
+# Code quality
+flake8

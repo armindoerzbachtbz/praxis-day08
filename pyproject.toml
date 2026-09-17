@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "techstyle"
+version = "1.0.0"
+description = "TechStyle — Flask e-commerce reference app for the DevOps & Infrastructure module"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Flask>=2.2",
+]
+
+[project.urls]
+Repository = "https://github.com/tbzdevops/techstyle"
+
+[project.scripts]
+run-techstyle = "app:main"
+
+[tool.setuptools]
+py-modules = ["app"]

@@ -1,0 +1,115 @@
+/* =====================================================
+   TechStyle — Custom styles
+   (Bootstrap 5 base, these add brand polish)
+   ===================================================== */
+
+/* ---- Brand colours ---- */
+:root {
+  --ts-red:    #dc3545;
+  --ts-dark:   #1a1a2e;
+  --ts-mid:    #16213e;
+  --ts-accent: #e94560;
+}
+
+/* ---- Global ---- */
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #212529;
+}
+
+/* ---- Navbar ---- */
+.navbar {
+  background-color: var(--ts-dark) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+}
+
+.navbar-brand {
+  font-size: 1.4rem;
+  letter-spacing: .5px;
+}
+
+/* ---- Product cards ---- */
+.product-card {
+  transition: transform .18s ease, box-shadow .18s ease;
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.15) !important;
+}
+
+.product-thumb {
+  height: 220px;
+  object-fit: cover;
+  background: #e9ecef;
+}
+
+/* ---- Buttons ---- */
+.btn-dark {
+  background-color: var(--ts-dark);
+  border-color: var(--ts-dark);
+}
+
+.btn-dark:hover {
+  background-color: #2d2d48;
+  border-color: #2d2d48;
+}
+
+/* ---- Cart badge ---- */
+.navbar .badge {
+  font-size: .6rem;
+  top: 4px !important;
+  right: -4px !important;
+}
+
+/* ---- Category sidebar ---- */
+.list-group-item.active {
+  background-color: var(--ts-dark);
+  border-color: var(--ts-dark);
+}
+
+/* ---- Admin panel ---- */
+.table th {
+  font-weight: 600;
+  letter-spacing: .03em;
+  font-size: .85rem;
+  text-transform: uppercase;
+}
+
+/* ---- Footer ---- */
+footer {
+  background-color: var(--ts-dark) !important;
+}
+
+/* ---- Misc ---- */
+.object-fit-cover {
+  object-fit: cover;
+}
+
+a {
+  color: var(--ts-dark);
+}
+
+a:hover {
+  color: var(--ts-accent);
+}
+
+/* ---- Hero banner on shop page ---- */
+.hero-banner {
+  background: linear-gradient(135deg, var(--ts-dark) 0%, var(--ts-accent) 100%);
+  color: #fff;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ---- Responsive tweaks ---- */
+@media (max-width: 576px) {
+  .product-thumb {
+    height: 180px;
+  }
+}

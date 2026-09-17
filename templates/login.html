@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Login — TechStyle{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header bg-dark text-white fw-bold text-center">
+        <i class="bi bi-person-circle me-1"></i>Sign In
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('login') }}">
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username" name="username"
+                   autofocus required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password" required>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-dark">Log In</button>
+          </div>
+        </form>
+      </div>
+      <div class="card-footer text-center text-muted small">
+        No account? <a href="{{ url_for('register') }}">Register here</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

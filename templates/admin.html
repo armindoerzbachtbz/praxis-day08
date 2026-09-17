@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel — TechStyle{% endblock %}
+
+{% block content %}
+<!-- No login required — anyone can access this page -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-shield-fill-check me-2 text-warning"></i>Admin Panel</h2>
+  <a href="{{ url_for('admin_seed') }}" class="btn btn-outline-warning btn-sm">
+    <i class="bi bi-database-add me-1"></i>Re-Seed DB
+  </a>
+</div>
+
+<!-- KPI cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm border-0 bg-primary text-white">
+      <div class="card-body">
+        <div class="display-6 fw-bold">{{ products|length }}</div>
+        <div>Products</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm border-0 bg-success text-white">
+      <div class="card-body">
+        <div class="display-6 fw-bold">{{ orders|length }}</div>
+        <div>Orders</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm border-0 bg-info text-dark">
+      <div class="card-body">
+        <div class="display-6 fw-bold">{{ users|length }}</div>
+        <div>Users</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm border-0 bg-danger text-white">
+      <div class="card-body">
+        <div class="display-6 fw-bold">CHF {{ "%.0f"|format(revenue) }}</div>
+        <div>Revenue</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="adminTabs">
+  <li class="nav-item">
+    <a class="nav-link active" data-bs-toggle="tab" href="#tab-products">Products</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#tab-orders">Orders</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#tab-users">Users</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#tab-add-product">+ Add Product</a>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- Products tab -->
+  <div class="tab-pane fade show active" id="tab-products">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th><th>Name</th><th>Category</th>
+              <th class="text-end">Price</th><th class="text-center">Stock</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr>
+              <td class="text-muted">{{ p.id }}</td>
+              <td>{{ p.name }}</td>
+              <td><span class="badge bg-secondary">{{ p.category }}</span></td>
+              <td class="text-end">CHF {{ "%.2f"|format(p.price) }}</td>
+              <td class="text-center">
+                {% if p.stock < 10 %}
+                  <span class="text-warning fw-bold">{{ p.stock }}</span>
+                {% else %}
+                  {{ p.stock }}
+                {% endif %}
+              </td>
+              <td>
+                <form action="{{ url_for('admin_delete_product', product_id=p.id) }}"
+                      method="post" class="d-inline"
+                      onsubmit="return confirm('Delete {{ p.name }}?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders tab -->
+  <div class="tab-pane fade" id="tab-orders">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th><th>Customer</th><th>Email</th>
+              <th class="text-end">Total</th><th>Status</th><th>Date</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in orders %}
+            <tr>
+              <td class="text-muted">#{{ o.id }}</td>
+              <td>{{ o.customer_name }}</td>
+              <td>{{ o.customer_email }}</td>
+              <td class="text-end fw-semibold">CHF {{ "%.2f"|format(o.total) }}</td>
+              <td>
+                <span class="badge
+                  {% if o.status == 'confirmed' %}bg-success
+                  {% elif o.status == 'shipped' %}bg-primary
+                  {% elif o.status == 'delivered' %}bg-secondary
+                  {% else %}bg-warning text-dark{% endif %}">
+                  {{ o.status }}
+                </span>
+              </td>
+              <td class="text-muted small">{{ o.created_at[:10] }}</td>
+              <td>
+                <form action="{{ url_for('admin_update_order', order_id=o.id) }}" method="post" class="d-flex gap-1">
+                  <select name="status" class="form-select form-select-sm" style="width:110px;">
+                    {% for s in ['pending','confirmed','shipped','delivered','cancelled'] %}
+                    <option value="{{ s }}" {% if o.status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Users tab -->
+  <div class="tab-pane fade" id="tab-users">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th><th>Username</th><th>Email</th>
+              <th>Password</th><th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td class="text-muted">{{ u.id }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.email }}</td>
+              <!-- Plaintext passwords exposed in admin — security is a day-11 problem -->
+              <td><code class="text-danger">{{ u.password }}</code></td>
+              <td class="text-muted small">{{ u.created_at[:10] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if not users %}
+        <div class="text-center text-muted py-4">No registered users yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Add product tab -->
+  <div class="tab-pane fade" id="tab-add-product">
+    <div class="card shadow-sm" style="max-width:600px;">
+      <div class="card-header bg-dark text-white fw-bold">Add New Product</div>
+      <div class="card-body">
+        <form action="{{ url_for('admin_add_product') }}" method="post">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Price (CHF)</label>
+              <input type="number" name="price" class="form-control" step="0.01" min="0" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Stock</label>
+              <input type="number" name="stock" class="form-control" value="100" min="0">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Category</label>
+            <input type="text" name="category" class="form-control" list="cat-options">
+            <datalist id="cat-options">
+              {% for cat in products | map(attribute='category') | unique %}
+              <option value="{{ cat }}">
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Image URL</label>
+            <input type="text" name="image_url" class="form-control"
+                   placeholder="https://…">
+          </div>
+          <button type="submit" class="btn btn-dark">
+            <i class="bi bi-plus-circle me-1"></i>Add Product
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
