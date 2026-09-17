@@ -24,6 +24,17 @@ htmlcov/
 
 # Logs
 *.log
+
+# Terraform / OpenTofu
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+.terraformrc
+terraform.rc
+
 __pycache__/
 *.pyc
 *.pyo

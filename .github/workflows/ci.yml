@@ -57,6 +57,30 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  #sonarqube:
+  #  name: SonarQube Quality Gate
+  #  runs-on: ubuntu-latest
+  #  needs: test
+    # Skips gracefully until SONAR_HOST_URL / SONAR_TOKEN repo secrets are set
+    # (i.e. until the self-hosted SonarQube EC2 instance from the Day 7 Praxis
+    # exists). See docs/DAY_7_COMPLETION.md for setup.
+  #  if: ${{ secrets.SONAR_HOST_URL != '' }}
+
+  #  steps:
+  #    - uses: actions/checkout@v4
+  #      with:
+  #        fetch-depth: 0
+
+  #    - name: Download coverage report
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        name: coverage-report
+
+  #    - name: SonarQube Scan
+  #      uses: SonarSource/sonarqube-scan-action@v4
+  #      env:
+  #        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   build:
     name: Build Package Artifact
@@ -78,9 +102,25 @@ jobs:
       - name: Build package (sdist + wheel)
         run: python -m build
 
+      # Upload build artifact, für eine kurzzeitige Speicherung und späteren Download, z.B. für Tests oder Deployment.
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: techstyle-dist
           path: dist/
-          retention-days: 14
+          retention-days: 14 # Keep the artifact for 14 days
+      
+      # Publish package to pypiserver (eigene Python registry) - optional, falls ein privater PyPI-Server verwendet wird.
+      # Voraussetzung: Die Secrets PYPISERVER_REPOSITORY_URL, PYPISERVER_USERNAME und PYPISERVER_PASSWORD müssen in den Repository-Einstellungen unter "Settings" > "Secrets and variables" > "Actions" hinzugefügt werden.
+      # PYPi server muss installiert und konfiguriert sein, um Pakete zu empfangen.
+      #- name: Publish package to pypiserver
+      #  env:
+      #    PYPISERVER_REPOSITORY_URL: ${{ secrets.PYPISERVER_REPOSITORY_URL }}
+      #    PYPISERVER_USERNAME: ${{ secrets.PYPISERVER_USERNAME }}
+      #    PYPISERVER_PASSWORD: ${{ secrets.PYPISERVER_PASSWORD }}
+      #  run: |
+      #    python -m twine upload \
+      #      --repository-url "$PYPISERVER_REPOSITORY_URL" \
+      #      --username "$PYPISERVER_USERNAME" \
+      #      --password "$PYPISERVER_PASSWORD" \
+      #      dist/*

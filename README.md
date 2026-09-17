@@ -1,146 +1,512 @@
-# Praxis
+# TechStyle Praxisaufträge: CI/CD Deployment auf AWS EC2
 
-## Aufsetzen von SonarQube Community Server auf EC2 VM mit Docker Compose
+In diesen Praxisaufträgen erweitert ihr die bestehende Python/Flask-App um ein Deployment auf AWS EC2. Die bestehende Pipeline `.github/workflows/ci.yml` ist die Grundlage. Darauf aufbauend erstellt ihr eine neue Pipeline:
 
-#### Sozialform
+```text
+.github/workflows/ci_cd.yml
+```
 
-Gruppenarbeit in 2er Teams:
-- Person 1: DevOps/Platform-Engineer kümmert sich um VM-Setup und Docker Deployment
-- Person 2: Applikationsentwickler mit Python Repo für SonarQube-Scan Integration
+Terraform wird in beiden Praxisaufträgen zuerst lokal ausgeführt. Die dadurch erzeugte öffentliche EC2-IP wird anschliessend in GitHub als Variable hinterlegt und von der Deployment-Pipeline verwendet.
 
-#### Ziel:
-SonarQube Community Edition auf einer EC2 VM mit Elastic IP mittels Docker Compose deployen. Automatisierung via Terraform und Cloud-Init.
+## Ausgangslage
 
-#### Voraussetzung
-- AWS CLI konfiguriert mit Learner Lab Credentials
-- Terraform installiert
-- Ein GitHub Repo mit Python-Code für SonarQube-Scans
+Dieses Repository enthält eine einfache Flask-Webapp:
 
-#### Musterlösung nutzen
+- `app.py` - Flask-Applikation
+- `seed_data.py` - Demo-Produkte für die SQLite-Datenbank
+- `requirements.txt` - Python-Abhängigkeiten
+- `deploy.sh` - einfaches SSH/SCP-Deployment
+- `infra/` - fertige Terraform/OpenTofu-Infrastruktur mit Cloud-Init
+- `.github/workflows/ci.yml` - bestehende CI-Pipeline
 
-Die komplette Musterlösung für diesen Auftrag ist im externen Repository auf dem `day_7_solution` Branch verfügbar:
-📁 **[tbzdevops/musterloesungen-praxisauftraege/day_7_solution](https://github.com/tbzdevops/musterloesungen-praxisauftraege/tree/day_7_solution)**
+Die bestehende `ci.yml` soll nicht ersetzt werden. Sie dient als Referenz für Linting, Tests und Build. Für die Praxisaufträge erstellt ihr zusätzlich `ci_cd.yml`.
 
-**Dateien in der Musterlösung:**
+## Gemeinsame Voraussetzung für beide Praxisaufträge
 
-- `sonarqube-vm.tf` — Terraform Manifest für EC2 VM mit 30 GB Diskspace, Security Group, Elastic IP
-- `cloud-init.yml` — Cloud-Init Script mit Docker Setup und systemd Service für SonarQube
-- `docker-compose.yml` — Docker Compose Konfiguration mit PostgreSQL und SonarQube Community
-- `README.md` — Zusätzliche Dokumentation
+Bevor ihr die App deployt, erstellt ihr lokal eine EC2-Instanz mit der mitgelieferten Infrastruktur im Ordner `infra/`.
 
-#### Schritte:
+Ihr müsst Terraform und Cloud-Init nicht selbst schreiben. Ihr führt die vorbereitete Infrastruktur nur aus und verwendet danach die ausgegebene IP-Adresse für eure Pipeline.
 
-**1. Musterlösung klonen oder kopieren** (Person 1)
+Es gibt zwei getrennte Infrastruktur-Vorlagen:
 
-   ```bash
-   # Option 1: Musterlösungs-Repo klonen (day_7_solution Branch)
-   git clone -b day_7_solution https://github.com/tbzdevops/musterloesungen-praxisauftraege.git
-   cd musterloesungen-praxisauftraege/
+```text
+infra/praxisauftrag-1
+infra/praxisauftrag-2
+```
 
-   # Option 2: Oder nur mit Shallow Clone für schnelleres Klonen
-   git clone -b day_7_solution --depth 1 https://github.com/tbzdevops/musterloesungen-praxisauftraege.git tag07-solution
-   cd tag07-solution/
-   ```
+`praxisauftrag-1` installiert bewusst kein Docker. `praxisauftrag-2` installiert Docker und Docker Compose.
 
-**2. Terraform initialisieren und VM erstellen** (Person 1)
+Ihr könnt entweder Terraform oder OpenTofu verwenden:
 
-   ```bash
-   # Terraform initialisieren
-   terraform init
+```bash
+terraform version
+```
 
-   # Plan anschauen
-   terraform plan
+oder:
 
-   # VM erstellen (dauert ~5 Minuten)
-   terraform apply
+```bash
+tofu version
+```
 
-   # Elastic IP wird angezeigt
-   # Beispielausgabe:
-   # sonarqube_ip = "54.123.45.67"
-   # sonarqube_url = "http://54.123.45.67:9000"
-   # startup_notice = "SonarQube needs about 5 minutes to start up..."
-   ```
+### 1. AWS vorbereiten
 
-   **Terraform-Features der Musterlösung:**
+Konfiguriert zuerst eure AWS Learner-Lab-Credentials lokal:
 
-   - ✅ Ubuntu 26.04 LTS AMI (aktuellste Sicherheitsupdates)
-   - ✅ t3.large Instance (8GB RAM, ausreichend für SonarQube)
-   - ✅ 30 GB EBS Volume (gp3) für Docker & Datenbanken
-   - ✅ Security Group mit SSH (Port 22) und SonarQube (Port 9000)
-   - ✅ Elastic IP für stabile externe Erreichbarkeit
-   - ✅ Cloud-Init Integration für automatisches Setup
-   - ✅ SSH Key Injection (falls ~/.ssh/id_rsa.pub vorhanden)
+```bash
+aws configure
+```
 
-**3. Cloud-Init Features verstehen** (Person 1)
+Gebt dabei die Werte aus dem Learner Lab ein:
 
-   Die Musterlösung nutzt ein optimiertes Cloud-Init Script mit:
+```text
+AWS Access Key ID: <Access Key>
+AWS Secret Access Key: <Secret Key>
+Default region name [us-east-1]:
+Default output format [json]:
+```
 
-   **Systemd Service für SonarQube:**
-   
-   ```bash
-   /etc/systemd/system/sonarqube.service
-   ```
+Setzt danach den Session Token aus dem Learner Lab:
 
-   - Automatischer Start beim Reboot
-   - `docker compose up -d` als Service managed
-   - `docker compose down` bei Shutdown
-   - Automatische Neustarts bei Fehlern
+```bash
+aws configure set aws_session_token "<Session Token>"
+```
 
-   **Docker Compose Setup:**
-   
-   - PostgreSQL 17 für Persistierung
-   - SonarQube Community Edition
-   - Named Volumes für Datenpersistierung
-   - Health Checks für Service-Readiness
-   - Bridge Network für Kommunikation
+Stellt danach sicher, dass eure Credentials aktiv sind:
 
-**4. Warte auf SonarQube Start** (Person 1)
+```bash
+aws sts get-caller-identity
+```
 
-   ```bash
-   # SSH in die VM
-   SONARQUBE_IP=$(terraform output -raw sonarqube_ip)
-   ssh -i ~/.ssh/id_rsa ubuntu@$SONARQUBE_IP
+Wenn der Befehl keine gültige Identität ausgibt, müsst ihr eure AWS Credentials zuerst neu setzen.
 
-   # In der VM: Logs prüfen
-   cd /opt/sonarqube
-   docker compose logs -f sonarqube
+### 2. SSH-Key vorbereiten
 
-   # Warte bis: "SonarQube is up" erscheint (ca. 5 Minuten)
-   # Dann: Ctrl+C zum Beenden
-   exit
-   ```
+Die EC2-Instanz braucht euren Public Key, damit ihr und später die Pipeline per SSH verbinden könnt.
 
-   ⏳ **Hinweis:** Das Terraform Output gibt auch einen `startup_notice` aus.
+Falls ihr noch keinen SSH-Key habt:
 
-**5. Zugriff auf SonarQube im Browser** (Person 1)
+```bash
+ssh-keygen -t ed25519 -C "techstyle"
+```
 
-   ```bash
-   # Hole Elastic IP
-   SONARQUBE_IP=$(terraform output -raw sonarqube_ip)
-   echo "Öffne: http://$SONARQUBE_IP:9000"
-   ```
+Standardmässig erwartet die Terraform-Vorlage diesen Public Key:
 
-   - Öffne im Browser: `http://<ELASTIC-IP>:9000`
-   - Standard-Login: Benutzer `admin`, Passwort `admin`
+```text
+~/.ssh/id_ed25519.pub
+```
 
-**6. SonarQube initial konfigurieren** (Person 1)
-   
-   - Passwort ändern
-   - Neuen User für **Person 2** erstellen
-   - Logins/Tokens an Person 2 weitergeben
-   - Lokales Projekt erstellen ("Create a local project")
+Wenn ihr einen anderen Key verwendet, gebt den Pfad beim Ausführen an.
 
-**7. Projekt in SonarQube erstellen** (Person 2)
-   
-   - Mit neuem User in SonarQube anmelden
-   - "Create a local project" wählen
-   - Projekt-Name `techstyle` eingeben
-   - Branch wählen: `main` oder `master`
-   - "Use the global settings" wählen
-   - Analysis Method: `GitHub Action` für automatisierte Scans -> Instruktionen für Python und Tokens speichern für setup in Projekt und Schritt 8
+Prüft danach, ob der Public Key existiert:
 
-**8. Testmässig Einbauen in Repo**
+```bash
+ls ~/.ssh/id_ed25519.pub
+```
 
-  - Benutze die Instruktionen aus Schritt 7 um einen zusätzlichen Schritt in die Pipeline zu bauen.
+Unter Windows PowerShell:
 
-<br>
+```powershell
+Test-Path ~/.ssh/id_ed25519.pub
+```
+
+Wenn die Datei fehlt, wurde der Key noch nicht erstellt oder an einem anderen Ort gespeichert.
+
+### 3. Richtigen Infrastruktur-Ordner wählen
+
+Für Praxisauftrag 1:
+
+```bash
+cd infra/praxisauftrag-1
+```
+
+Für Praxisauftrag 2:
+
+```bash
+cd infra/praxisauftrag-2
+```
+
+Terraform sucht automatisch die aktuellste Ubuntu 22.04 LTS AMI für die konfigurierte Region.
+
+Optional könnt ihr die Beispiel-Variablen kopieren:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Unter Windows PowerShell:
+
+```powershell
+Copy-Item terraform.tfvars.example terraform.tfvars
+```
+
+Tragt dort euren Public Key ein, damit die Pipeline später per SSH deployen kann:
+
+```hcl
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+```
+
+Die mitgelieferte Infrastruktur erstellt:
+
+- eine EC2-Instanz
+- eine eigene VPC mit Public Subnet, Internet Gateway und Route Table
+- eine Security Group
+- eine öffentliche IPv4-Adresse für die EC2-Instanz
+- SSH-Zugriff über den Public Key aus `ssh_public_key_path`
+- Cloud-Init Setup beim ersten Start
+
+Es wird keine Elastic IP erstellt. Wenn ihr die EC2-Instanz neu erstellt, bekommt sie eine neue öffentliche IP-Adresse.
+
+Die EC2-Instanz soll mindestens Folgendes bereitstellen:
+
+- Ubuntu Server
+- SSH-Zugriff mit eurem Key
+- Security Group für SSH
+- Security Group für die App
+- Cloud-Init zur Installation der benötigten Software
+
+Cloud-Init für Praxisauftrag 1 installiert:
+
+- Python 3
+- pip
+- venv
+- Git
+- SQLite
+- curl
+
+Cloud-Init für Praxisauftrag 2 installiert zusätzlich:
+
+- Docker
+- Docker Compose Plugin
+
+### 4. Terraform oder OpenTofu lokal ausführen
+
+Mit Terraform:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+Mit OpenTofu:
+
+```bash
+tofu init
+tofu plan
+tofu apply
+```
+
+Wenn euer Public Key nicht unter `~/.ssh/id_ed25519.pub` liegt, gebt den Pfad explizit an:
+
+```bash
+terraform apply -var="ssh_public_key_path=~/.ssh/id_rsa.pub"
+```
+
+IP auslesen:
+
+```bash
+terraform output -raw public_ip
+```
+
+Mit OpenTofu:
+
+```bash
+tofu output -raw public_ip
+```
+
+App-URL anzeigen:
+
+```bash
+terraform output app_url
+```
+
+SSH-Befehl anzeigen:
+
+```bash
+terraform output ssh_command
+```
+
+### 5. GitHub Repository konfigurieren
+
+Tragt die EC2-Verbindungsdaten in GitHub ein.
+
+Unter `Settings -> Secrets and variables -> Actions -> Variables`:
+
+```text
+EC2_HOST=<public-ip-aus-terraform>
+EC2_USER=ubuntu
+```
+
+Unter `Settings -> Secrets and variables -> Actions -> Secrets`:
+
+```text
+EC2_SSH_KEY=<privater SSH-Key>
+```
+
+Der private SSH-Key muss zu dem Public Key passen, der beim Erstellen der EC2-Instanz hinterlegt wurde.
+
+## Praxisauftrag 1: Deployment mit deploy.sh
+
+### Ziel
+
+Ihr erstellt eine erste CI/CD-Pipeline, die die Flask-App nach erfolgreichem Testlauf auf eine EC2-Instanz deployt. Das Deployment erfolgt mit dem bestehenden `deploy.sh`.
+
+Diese Variante ist bewusst einfach. Sie zeigt, wie ein Deployment mit SSH und SCP grundsätzlich funktioniert.
+
+### Aufgabe
+
+Erstellt die Datei:
+
+```text
+.github/workflows/ci_cd.yml
+```
+
+Die Pipeline soll:
+
+1. Bei Push auf `main` starten.
+2. Den Code auschecken.
+3. Python installieren.
+4. Dependencies aus `requirements.txt` installieren.
+5. Linting oder Tests ausführen.
+6. Den SSH-Key aus `EC2_SSH_KEY` vorbereiten.
+7. Die App mit `deploy.sh` auf die EC2-Instanz deployen.
+8. Die Datenbank nur dann seeden, wenn noch keine Produktdaten vorhanden sind.
+9. Einen Health Check gegen die laufende App ausführen.
+
+### Erwarteter Ablauf
+
+```mermaid
+flowchart TD
+    A[Push auf main] --> B[Checkout]
+    B --> C[Python installieren]
+    C --> D[Dependencies installieren]
+    D --> E[Linting und Tests]
+    E --> F[SSH-Key vorbereiten]
+    F --> G[deploy.sh ausführen]
+    G --> H[App auf EC2 starten]
+    H --> I[Seed prüfen]
+    I --> J{Produkte vorhanden?}
+    J -->|Nein| K[seed_data.py ausführen]
+    J -->|Ja| L[Seed überspringen]
+    K --> M[Health Check]
+    L --> M[Health Check]
+    M --> N[Deployment erfolgreich]
+```
+
+### Hinweise zu deploy.sh
+
+Das bestehende `deploy.sh` kopiert die App per `scp` auf den Server und startet sie per SSH neu.
+
+Ihr müsst sicherstellen, dass das Script die Werte aus GitHub Actions verwenden kann, zum Beispiel:
+
+```bash
+EC2_HOST
+EC2_USER
+EC2_SSH_KEY
+```
+
+Das Script darf nicht fest an eine alte IP-Adresse gebunden sein, weil die EC2-IP nach dem Neuerstellen der Instanz wechseln kann.
+
+### Seed-Daten
+
+`seed_data.py` enthält die Demo-Produkte. Das Script darf nicht bei jedem Deployment blind ausgeführt werden, weil es bestehende Produkte löscht und neu anlegt.
+
+Prüft deshalb zuerst, ob Produkte vorhanden sind:
+
+```sql
+SELECT COUNT(*) FROM products;
+```
+
+Nur wenn keine Produkte vorhanden sind, soll `seed_data.py` ausgeführt werden.
+
+### Health Check
+
+Die Pipeline soll am Schluss prüfen, ob die App erreichbar ist:
+
+```bash
+curl -f http://$EC2_HOST:5001/api/products
+```
+
+Wenn der Health Check fehlschlägt, soll die Pipeline fehlschlagen.
+
+### Abgabe
+
+Am Ende von Praxisauftrag 1 sollen vorhanden sein:
+
+- `.github/workflows/ci_cd.yml`
+- lauffähiges Deployment auf EC2
+- App erreichbar über `http://<EC2_HOST>:5001`
+- Produkte werden unter `/api/products` zurückgegeben
+- kurze Dokumentation der aktuellen Deployment-URL
+
+## Praxisauftrag 2: Produktives Deployment mit Docker Compose
+
+### Ziel
+
+Ihr ersetzt das einfache SSH/SCP-Deployment durch ein produktionsnäheres Deployment mit Docker Compose. Die Flask-App soll nicht mehr direkt mit `python app.py` laufen, sondern mit Gunicorn.
+
+### Aufgabe
+
+Erweitert oder ersetzt eure `ci_cd.yml` so, dass die App containerisiert deployt wird.
+
+Die Lösung soll enthalten:
+
+1. Einen `Dockerfile`.
+2. Eine `docker-compose.yml`.
+3. Start der Flask-App mit Gunicorn.
+4. Deployment auf EC2 über GitHub Actions.
+5. Einen Health Check nach dem Deployment.
+6. Idempotentes Seeding der Datenbank.
+
+### Erwarteter Ablauf
+
+```mermaid
+flowchart TD
+    A[Push auf main] --> B[Checkout]
+    B --> C[Python installieren]
+    C --> D[Dependencies installieren]
+    D --> E[Tests ausführen]
+    E --> F[Docker Image bauen]
+    F --> G[Image bereitstellen]
+    G --> H[SSH auf EC2]
+    H --> I[docker compose pull oder build]
+    I --> J[docker compose up -d]
+    J --> K[Gunicorn startet Flask-App]
+    K --> L[Seed prüfen]
+    L --> M{Produkte vorhanden?}
+    M -->|Nein| N[Seed im Container ausführen]
+    M -->|Ja| O[Seed überspringen]
+    N --> P[Health Check]
+    O --> P[Health Check]
+    P --> Q[Deployment erfolgreich]
+```
+
+### Gunicorn
+
+In der produktiven Variante soll die App mit Gunicorn gestartet werden, zum Beispiel:
+
+```bash
+gunicorn -w 2 -b 0.0.0.0:5001 app:app
+```
+
+Nicht verwenden für die produktive Variante:
+
+```bash
+python app.py
+```
+
+### Docker Compose
+
+Die EC2-Instanz soll durch Cloud-Init Docker und Docker Compose installiert bekommen. Die Pipeline verbindet sich danach per SSH mit der Instanz und startet die App mit:
+
+```bash
+docker compose up -d
+```
+
+Je nach Lösung kann das Docker Image direkt auf der EC2-Instanz gebaut oder vorher in einer Registry wie GHCR veröffentlicht werden.
+
+Für diesen Praxisauftrag reicht die einfachere Variante:
+
+```text
+GitHub Actions -> SSH auf EC2 -> Repository/Dateien aktualisieren -> docker compose up -d --build
+```
+
+### Persistente Daten
+
+SQLite darf für diesen Auftrag weiterverwendet werden. Die Datenbank darf aber nicht in einem flüchtigen Container-Dateisystem verschwinden.
+
+Verwendet deshalb ein Volume oder einen Host-Pfad, zum Beispiel:
+
+```text
+/opt/techstyle/data/techstyle.db
+```
+
+Die App und `seed_data.py` müssen denselben Datenbankpfad verwenden.
+
+### Health Check
+
+Auch in Praxisauftrag 2 muss die Pipeline am Ende prüfen, ob die App läuft:
+
+```bash
+curl -f http://$EC2_HOST:5001/api/products
+```
+
+Optional kann später ein Reverse Proxy wie Caddy oder Nginx ergänzt werden. Für diesen Auftrag ist Port `5001` ausreichend.
+
+### Abgabe
+
+Am Ende von Praxisauftrag 2 sollen vorhanden sein:
+
+- `.github/workflows/ci_cd.yml`
+- `Dockerfile`
+- `docker-compose.yml`
+- App startet mit Gunicorn
+- App läuft auf EC2 in Docker Compose
+- Datenbank ist persistent
+- Produkte werden nicht bei jedem Deploy gelöscht
+- Health Check läuft in der Pipeline
+
+## Endlösung: Terraform in die Pipeline integrieren
+
+Zum Schluss wird gezeigt, wie die manuelle Übergabe der IP-Adresse automatisiert werden kann.
+
+Die Endlösung liest die EC2-IP direkt aus Terraform aus:
+
+```bash
+EC2_HOST=$(terraform output -raw public_ip)
+```
+
+Dann muss die IP nicht mehr manuell in GitHub aktualisiert werden.
+
+```mermaid
+flowchart TD
+    A[Push auf main] --> B[Terraform init]
+    B --> C[Terraform apply]
+    C --> D[public_ip aus Terraform Output lesen]
+    D --> E[CI-Schritte ausführen]
+    E --> F[Deployment auf EC2]
+    F --> G[Health Check]
+```
+
+Diese Variante ist die professionellere Endlösung. Für die beiden Praxisaufträge wird Terraform aber zuerst bewusst lokal ausgeführt, damit Infrastruktur und Deployment getrennt verstanden werden.
+
+## Bewertungsideen für Classroom
+
+Mögliche Prüfpunkte für Praxisauftrag 1:
+
+- `.github/workflows/ci_cd.yml` existiert
+- Pipeline enthält Tests
+- Pipeline verwendet SSH
+- Pipeline verwendet `deploy.sh`
+- Pipeline verwendet GitHub Secrets oder Variables
+- Seed-Daten werden nicht bei jedem Deployment destruktiv neu geladen
+- Health Check ist vorhanden
+
+Mögliche Prüfpunkte für Praxisauftrag 2:
+
+- `Dockerfile` existiert
+- `docker-compose.yml` existiert
+- Pipeline baut oder startet Docker Compose
+- Gunicorn wird verwendet
+- produktiver Start verwendet nicht `python app.py`
+- persistenter Datenbankpfad oder Volume vorhanden
+- Health Check ist vorhanden
+
+## Aufräumen
+
+Vergesst nach dem Auftrag nicht, die AWS-Ressourcen wieder zu löschen:
+
+```bash
+# In den gleichen Ordner wechseln, in dem ihr apply ausgeführt habt:
+cd infra/praxisauftrag-1
+terraform destroy
+```
+
+Für Praxisauftrag 2 entsprechend:
+
+```bash
+cd infra/praxisauftrag-2
+terraform destroy
+```
+
+Prüft danach in der AWS Console, ob keine EC2-Instanz, kein EBS-Volume und keine unnötigen Security Groups weiterlaufen.

@@ -1,0 +1,6 @@
+# Optional: make resource names unique.
+student_name = "student"
+
+## Optional but recommended for SSH and GitHub Actions deployments.
+## Use the public key, not the private key.
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
