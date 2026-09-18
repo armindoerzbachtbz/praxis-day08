@@ -101,15 +101,15 @@ jobs:
 
       - name: Validate deployment configuration
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_HOST: ${{ vars.PA1_EC2_HOST }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
-          test -n "$EC2_HOST" || (echo "Missing GitHub variable EC2_HOST" && exit 1)
+          test -n "$EC2_HOST" || (echo "Missing GitHub variable PA1_EC2_HOST" && exit 1)
           test -n "$EC2_SSH_KEY" || (echo "Missing GitHub secret EC2_SSH_KEY" && exit 1)
 
       - name: Prepare SSH key
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_HOST: ${{ vars.PA1_EC2_HOST }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
@@ -119,7 +119,7 @@ jobs:
 
       - name: Deploy application
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_HOST: ${{ vars.PA1_EC2_HOST }}
           EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
           KEY_PATH: /home/runner/.ssh/ec2_key
           REMOTE_DIR: /home/ubuntu/techstyle
@@ -129,7 +129,7 @@ jobs:
 
       - name: Health check
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_HOST: ${{ vars.PA1_EC2_HOST }}
         run: |
           for i in {1..12}; do
             if curl -fsS "http://$EC2_HOST:5001/api/products" >/tmp/products.json; then

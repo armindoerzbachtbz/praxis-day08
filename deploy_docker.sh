@@ -55,7 +55,26 @@ ssh "${SSH_OPTS[@]}" "$SERVER" "REMOTE_DIR='$REMOTE_DIR' bash -s" << 'ENDSSH'
 
   cd "$REMOTE_DIR"
 
-  docker compose up -d --build
+  if command -v cloud-init >/dev/null 2>&1; then
+    sudo cloud-init status --wait >/dev/null || true
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "--> Docker is missing; installing Docker and Docker Compose..."
+    sudo apt-get update
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2
+  fi
+
+  sudo systemctl enable docker
+  sudo systemctl start docker
+
+  DOCKER="docker"
+  if ! docker ps >/dev/null 2>&1; then
+    DOCKER="sudo docker"
+  fi
+
+  $DOCKER compose version
+  $DOCKER compose up -d --build
 
   echo "--> Waiting for container to become ready..."
   for i in $(seq 1 12); do
@@ -67,7 +86,7 @@ ssh "${SSH_OPTS[@]}" "$SERVER" "REMOTE_DIR='$REMOTE_DIR' bash -s" << 'ENDSSH'
   done
 
   echo "--> Seeding database if needed..."
-  docker compose exec -T web python - <<'PY'
+  $DOCKER compose exec -T web python - <<'PY'
 import sqlite3
 import seed_data
 
@@ -95,7 +114,7 @@ else:
     print(f"Seed skipped: products already contains {count} rows")
 PY
 
-  docker compose ps
+  $DOCKER compose ps
 ENDSSH
 
 echo ""
