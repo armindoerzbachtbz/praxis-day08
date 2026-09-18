@@ -40,9 +40,11 @@ Es gibt zwei getrennte Infrastruktur-Vorlagen:
 ```text
 infra/praxisauftrag-1
 infra/praxisauftrag-2
+infra/praxisauftrag-3
 ```
 
 `praxisauftrag-1` installiert bewusst kein Docker. `praxisauftrag-2` installiert Docker und Docker Compose.
+`praxisauftrag-3` erstellt eine Blue-Green-Infrastruktur mit zwei EC2-Instanzen und einem Application Load Balancer.
 
 Ihr könnt entweder Terraform oder OpenTofu verwenden:
 
@@ -125,6 +127,12 @@ Für Praxisauftrag 2:
 
 ```bash
 cd infra/praxisauftrag-2
+```
+
+Für Praxisauftrag 3:
+
+```bash
+cd infra/praxisauftrag-3
 ```
 
 Terraform sucht automatisch die aktuellste Ubuntu 22.04 LTS AMI für die konfigurierte Region.
@@ -235,7 +243,8 @@ Tragt die EC2-Verbindungsdaten in GitHub ein.
 Unter `Settings -> Secrets and variables -> Actions -> Variables`:
 
 ```text
-EC2_HOST=<public-ip-aus-terraform>
+PA1_EC2_HOST=<public-ip-aus-terraform-fuer-praxisauftrag-1>
+PA2_EC2_HOST=<public-ip-aus-terraform-fuer-praxisauftrag-2>
 EC2_USER=ubuntu
 ```
 
@@ -302,7 +311,7 @@ Das bestehende `deploy.sh` kopiert die App per `scp` auf den Server und startet 
 Ihr müsst sicherstellen, dass das Script die Werte aus GitHub Actions verwenden kann, zum Beispiel:
 
 ```bash
-EC2_HOST
+PA1_EC2_HOST
 EC2_USER
 EC2_SSH_KEY
 ```
@@ -326,7 +335,7 @@ Nur wenn keine Produkte vorhanden sind, soll `seed_data.py` ausgeführt werden.
 Die Pipeline soll am Schluss prüfen, ob die App erreichbar ist:
 
 ```bash
-curl -f http://$EC2_HOST:5001/api/products
+curl -f http://$PA1_EC2_HOST:5001/api/products
 ```
 
 Wenn der Health Check fehlschlägt, soll die Pipeline fehlschlagen.
@@ -337,7 +346,7 @@ Am Ende von Praxisauftrag 1 sollen vorhanden sein:
 
 - `.github/workflows/ci_cd.yml`
 - lauffähiges Deployment auf EC2
-- App erreichbar über `http://<EC2_HOST>:5001`
+- App erreichbar über `http://<PA1_EC2_HOST>:5001`
 - Produkte werden unter `/api/products` zurückgegeben
 - kurze Dokumentation der aktuellen Deployment-URL
 
@@ -430,7 +439,7 @@ Die App und `seed_data.py` müssen denselben Datenbankpfad verwenden.
 Auch in Praxisauftrag 2 muss die Pipeline am Ende prüfen, ob die App läuft:
 
 ```bash
-curl -f http://$EC2_HOST:5001/api/products
+curl -f http://$PA2_EC2_HOST:5001/api/products
 ```
 
 Optional kann später ein Reverse Proxy wie Caddy oder Nginx ergänzt werden. Für diesen Auftrag ist Port `5001` ausreichend.
@@ -448,6 +457,262 @@ Am Ende von Praxisauftrag 2 sollen vorhanden sein:
 - Datenbank ist persistent
 - Produkte werden nicht bei jedem Deploy gelöscht
 - Health Check läuft in der Pipeline
+
+## Praxisauftrag 3: Blue-Green Deployment mit ALB
+
+### Ziel
+
+Ihr erweitert das Docker-Deployment zu einem Blue-Green Deployment. Dafür gibt es zwei EC2-Instanzen:
+
+```text
+blue  = aktuelle oder vorherige Version
+green = neue oder nächste Version
+```
+
+Ein Application Load Balancer (ALB) entscheidet, welche Umgebung den Live-Traffic erhält.
+
+### Infrastruktur
+
+Für diesen Auftrag verwendet ihr:
+
+```bash
+cd infra/praxisauftrag-3
+terraform init
+terraform apply
+```
+
+Die Terraform-Vorlage erstellt:
+
+- eine VPC
+- zwei Public Subnets in unterschiedlichen Availability Zones
+- zwei EC2-Instanzen: Blue und Green
+- Docker und Docker Compose auf beiden Instanzen
+- einen Application Load Balancer
+- zwei Target Groups: Blue und Green
+- einen HTTP Listener, der initial auf Blue zeigt
+
+Outputs anzeigen:
+
+```bash
+terraform output
+```
+
+Wichtige Outputs:
+
+```text
+blue_public_ip
+green_public_ip
+alb_dns_name
+alb_listener_arn
+blue_target_group_arn
+green_target_group_arn
+```
+
+### GitHub Variables und Secrets
+
+Tragt die Terraform Outputs in GitHub ein.
+
+Unter `Settings -> Secrets and variables -> Actions -> Variables`:
+
+```text
+PA3_BLUE_EC2_HOST=<blue_public_ip>
+PA3_GREEN_EC2_HOST=<green_public_ip>
+EC2_USER=ubuntu
+PA3_ALB_DNS_NAME=<alb_dns_name>
+PA3_ALB_LISTENER_ARN=<alb_listener_arn>
+PA3_BLUE_TARGET_GROUP_ARN=<blue_target_group_arn>
+PA3_GREEN_TARGET_GROUP_ARN=<green_target_group_arn>
+PA3_AWS_REGION=us-east-1
+```
+
+Unter `Settings -> Secrets and variables -> Actions -> Secrets`:
+
+```text
+EC2_SSH_KEY=<privater SSH-Key>
+```
+
+Wenn die Pipeline den ALB automatisch umschalten soll, braucht sie zusätzlich AWS Credentials:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+```
+
+Diese Werte kommen aus dem AWS Learner Lab. Der Session Token läuft ab und muss nach einem Neustart des Learner Labs in GitHub aktualisiert werden.
+
+### Pipeline
+
+Die Musterlösung liegt in:
+
+```text
+.github/workflows/ci_cd_blue_green.yml
+```
+
+Beim manuellen Start wählt ihr:
+
+```text
+deploy_target = blue oder green
+switch_traffic = true oder false
+```
+
+Empfohlener Ablauf:
+
+```text
+1. Aktuell zeigt der ALB auf Blue.
+2. Pipeline manuell starten mit deploy_target=green.
+3. Pipeline deployed die neue Version auf Green.
+4. Pipeline prüft Green direkt über Port 5001.
+5. Wenn alles funktioniert: switch_traffic=true setzen.
+6. Pipeline schaltet den ALB Listener auf Green.
+7. Bei Problemen kann wieder auf Blue zurückgeschaltet werden.
+```
+
+Grundregel:
+
+```text
+Deploye immer auf die inaktive Farbe.
+
+Wenn Blue live ist: neue Version auf Green deployen.
+Wenn Green live ist: neue Version auf Blue deployen.
+```
+
+### Testablauf: Manuelles Umschalten
+
+Nachdem die Infrastruktur mit Terraform erstellt wurde, testet zuerst, ob die App über den Load Balancer erreichbar ist:
+
+```text
+http://<PA3_ALB_DNS_NAME>
+http://<PA3_ALB_DNS_NAME>/api/products
+```
+
+Nehmt danach eine sichtbare Änderung in der App vor, zum Beispiel in einem Template oder Text auf der Startseite.
+
+Wenn der ALB aktuell auf Blue zeigt, startet die Pipeline manuell mit:
+
+```text
+deploy_target = green
+switch_traffic = false
+```
+
+Damit wird die neue Version auf Green deployed, aber der ALB bleibt noch auf Blue. Prüft Green direkt:
+
+```text
+http://<PA3_GREEN_EC2_HOST>:5001
+http://<PA3_GREEN_EC2_HOST>:5001/api/products
+```
+
+Wenn Green funktioniert, schaltet den ALB manuell in der AWS Console um:
+
+```text
+EC2 -> Load Balancers -> euren ALB auswählen
+Listeners -> HTTP:80 auswählen
+Default action bearbeiten
+Forward to: green Target Group
+Speichern
+```
+
+Prüft danach wieder über den Load Balancer:
+
+```text
+http://<PA3_ALB_DNS_NAME>
+http://<PA3_ALB_DNS_NAME>/api/products
+```
+
+Jetzt sollte die neue Version sichtbar sein.
+
+Rollback manuell testen:
+
+```text
+EC2 -> Load Balancers -> euren ALB auswählen
+Listeners -> HTTP:80 auswählen
+Default action bearbeiten
+Forward to: blue Target Group
+Speichern
+```
+
+Prüft danach erneut:
+
+```text
+http://<PA3_ALB_DNS_NAME>
+```
+
+Jetzt sollte wieder die Blue-Version aktiv sein.
+
+### Testablauf: Automatisches Umschalten
+
+Für automatisches Umschalten braucht die Pipeline AWS-Zugriff. Konfiguriert dafür in GitHub zusätzlich diese Secrets:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+```
+
+und diese Variable:
+
+```text
+PA3_AWS_REGION=us-east-1
+```
+
+Diese Credentials müssen zu eurem aktuellen AWS Learner Lab passen.
+
+Startet danach die Pipeline mit:
+
+```text
+deploy_target = green
+switch_traffic = true
+```
+
+Die Pipeline macht dann automatisch:
+
+```text
+1. Deploy auf Green
+2. Direkter Health Check auf Green
+3. ALB Listener auf Green Target Group umschalten
+4. Health Check über den ALB
+```
+
+Automatischen Rollback testen:
+
+```text
+deploy_target = blue
+switch_traffic = true
+```
+
+Danach sollte der ALB wieder auf Blue zeigen.
+
+### Erwarteter Ablauf
+
+```mermaid
+flowchart TD
+    A[Workflow manuell starten] --> B{deploy_target}
+    B -->|blue| C[PA3_BLUE_EC2_HOST auswählen]
+    B -->|green| D[PA3_GREEN_EC2_HOST auswählen]
+    C --> E[Docker Compose Deploy]
+    D --> E[Docker Compose Deploy]
+    E --> F[Direkter Health Check auf Zielinstanz]
+    F --> G{switch_traffic?}
+    G -->|Nein| H[Deployment endet ohne Umschalten]
+    G -->|Ja| I[ALB Listener auf Ziel-Target-Group setzen]
+    I --> J[Health Check über ALB]
+    J --> K[Blue-Green Deployment erfolgreich]
+```
+
+### Rollback
+
+Rollback bedeutet: Pipeline erneut starten und auf die andere Farbe umschalten.
+
+Beispiel:
+
+```text
+Aktuell live: green
+Rollback-Ziel: blue
+deploy_target=blue
+switch_traffic=true
+```
+
+Wenn auf Blue bereits eine funktionierende ältere Version läuft, wird der ALB wieder auf Blue geschaltet.
 
 ## Endlösung: Terraform in die Pipeline integrieren
 
@@ -495,6 +760,17 @@ Mögliche Prüfpunkte für Praxisauftrag 2:
 - persistenter Datenbankpfad oder Volume vorhanden
 - Health Check ist vorhanden
 
+Mögliche Prüfpunkte für Praxisauftrag 3:
+
+- `infra/praxisauftrag-3` existiert
+- Terraform erstellt zwei EC2-Instanzen
+- Terraform erstellt einen Application Load Balancer
+- Terraform erstellt zwei Target Groups
+- Pipeline enthält `deploy_target` mit `blue` und `green`
+- Pipeline kann gezielt auf Blue oder Green deployen
+- Pipeline enthält einen direkten Health Check
+- Pipeline kann optional den ALB Listener umschalten
+
 ## Aufräumen
 
 Vergesst nach dem Auftrag nicht, die AWS-Ressourcen wieder zu löschen:
@@ -509,6 +785,13 @@ Für Praxisauftrag 2 entsprechend:
 
 ```bash
 cd infra/praxisauftrag-2
+terraform destroy
+```
+
+Für Praxisauftrag 3 entsprechend:
+
+```bash
+cd infra/praxisauftrag-3
 terraform destroy
 ```
 
