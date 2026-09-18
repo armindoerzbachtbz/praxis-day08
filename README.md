@@ -6,7 +6,9 @@ In diesen Praxisaufträgen erweitert ihr die bestehende Python/Flask-App um ein 
 .github/workflows/ci_cd.yml
 ```
 
-Terraform wird in beiden Praxisaufträgen zuerst lokal ausgeführt. Die dadurch erzeugte öffentliche EC2-IP wird anschliessend in GitHub als Variable hinterlegt und von der Deployment-Pipeline verwendet.
+In Praxisauftrag 1 bis 3 wird Terraform zuerst lokal ausgeführt. Die dadurch erzeugten IP-Adressen und ALB-Werte werden anschliessend in GitHub als Variables hinterlegt und von der Deployment-Pipeline verwendet.
+
+In Praxisauftrag 4 wird Terraform direkt in die Pipeline integriert. Dann liest die Pipeline die Terraform Outputs selbst aus, und die manuellen Host-Variables wie `PA1_EC2_HOST`, `PA2_EC2_HOST` oder `PA3_BLUE_EC2_HOST` werden nicht mehr benötigt.
 
 ## Ausgangslage
 
@@ -29,7 +31,7 @@ Für die Musterlösung gibt es zusätzlich eine Docker-Variante:
 
 Diese Pipeline zeigt die vollständige Lösung für Praxisauftrag 2 mit Docker Compose und Gunicorn.
 
-## Gemeinsame Voraussetzung für beide Praxisaufträge
+## Gemeinsame Voraussetzung für Praxisauftrag 1 bis 3
 
 Bevor ihr die App deployt, erstellt ihr lokal eine EC2-Instanz mit der mitgelieferten Infrastruktur im Ordner `infra/`.
 
@@ -41,10 +43,13 @@ Es gibt zwei getrennte Infrastruktur-Vorlagen:
 infra/praxisauftrag-1
 infra/praxisauftrag-2
 infra/praxisauftrag-3
+infra/praxisauftrag-4
 ```
 
 `praxisauftrag-1` installiert bewusst kein Docker. `praxisauftrag-2` installiert Docker und Docker Compose.
 `praxisauftrag-3` erstellt eine Blue-Green-Infrastruktur mit zwei EC2-Instanzen und einem Application Load Balancer.
+Praxisauftrag 4 nutzt eine dieser Infrastruktur-Vorlagen, führt Terraform/OpenTofu aber in der Pipeline aus.
+`praxisauftrag-4` ist die OpenTofu-Lösung für ein automatisiertes Docker-Deployment.
 
 Ihr könnt entweder Terraform oder OpenTofu verwenden:
 
@@ -751,29 +756,124 @@ deploy_target=blue
 
 Wenn auf Blue bereits eine funktionierende ältere Version läuft, wird der ALB wieder auf Blue geschaltet.
 
-## Endlösung: Terraform in die Pipeline integrieren
+## Praxisauftrag 4: Terraform in die Pipeline integrieren
 
-Zum Schluss wird gezeigt, wie die manuelle Übergabe der IP-Adresse automatisiert werden kann.
+### Ziel
 
-Die Endlösung liest die EC2-IP direkt aus Terraform aus:
+In den ersten Praxisaufträgen habt ihr Terraform lokal ausgeführt und die IP-Adressen danach manuell in GitHub Variables eingetragen.
 
-```bash
-EC2_HOST=$(terraform output -raw public_ip)
+In Praxisauftrag 4 automatisiert ihr diesen Schritt: Die Pipeline führt bei jedem Lauf `terraform apply` oder `tofu apply` aus, liest danach die Outputs und verwendet diese Werte direkt für das Deployment.
+
+Dadurch entfallen die manuellen Host-Variables aus den vorherigen Aufträgen, zum Beispiel:
+
+```text
+PA1_EC2_HOST
+PA2_EC2_HOST
+PA3_BLUE_EC2_HOST
+PA3_GREEN_EC2_HOST
+PA3_ALB_DNS_NAME
 ```
 
-Dann muss die IP nicht mehr manuell in GitHub aktualisiert werden.
+### Aufgabe
+
+Erstellt oder erweitert eine Pipeline, die Terraform integriert.
+
+Die dazugehörige Infrastruktur liegt in:
+
+```text
+infra/praxisauftrag-4
+```
+
+Die Pipeline soll:
+
+1. AWS Credentials aus GitHub Secrets verwenden.
+2. Terraform oder OpenTofu installieren.
+3. In den passenden `infra/`-Ordner wechseln.
+4. `terraform init` oder `tofu init` ausführen.
+5. `terraform apply -auto-approve` oder `tofu apply -auto-approve` ausführen.
+6. Terraform Outputs auslesen.
+7. Die EC2-IP als Deployment-Ziel verwenden.
+8. Danach die App deployen.
+9. Einen Health Check ausführen.
+
+Die Lösung verwendet OpenTofu:
+
+```bash
+tofu init
+tofu apply -auto-approve
+tofu output -raw public_ip
+```
+
+Beispiel für das Auslesen der IP:
+
+```bash
+EC2_HOST=$(tofu output -raw public_ip)
+```
+
+Danach muss die IP nicht mehr manuell in GitHub aktualisiert werden. Die Pipeline setzt `EC2_HOST` intern aus dem Terraform/OpenTofu Output.
+
+### GitHub Secrets
+
+Für diesen Auftrag braucht die Pipeline AWS-Zugriff.
+
+Unter `Settings -> Secrets and variables -> Actions -> Secrets`:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+EC2_SSH_KEY
+```
+
+Unter `Settings -> Secrets and variables -> Actions -> Variables`:
+
+```text
+EC2_USER=ubuntu
+AWS_REGION=us-east-1
+```
+
+Es braucht für diesen Auftrag keine Host-Variable wie `PA2_EC2_HOST`, weil die Pipeline den Host aus `tofu output` liest.
+
+Der AWS Session Token aus dem Learner Lab läuft ab. Wenn das Learner Lab neu gestartet wird, muss `AWS_SESSION_TOKEN` in GitHub aktualisiert werden.
+
+### Erwarteter Ablauf
 
 ```mermaid
 flowchart TD
-    A[Push auf main] --> B[Terraform init]
-    B --> C[Terraform apply]
+    A[Push oder manueller Start] --> B[tofu init]
+    B --> C[tofu apply -auto-approve]
     C --> D[public_ip aus Terraform Output lesen]
     D --> E[CI-Schritte ausführen]
     E --> F[Deployment auf EC2]
     F --> G[Health Check]
 ```
 
-Diese Variante ist die professionellere Endlösung. Für die beiden Praxisaufträge wird Terraform aber zuerst bewusst lokal ausgeführt, damit Infrastruktur und Deployment getrennt verstanden werden.
+### Hinweis
+
+Für diesen Auftrag braucht ihr ein Konzept für den Terraform State. Wenn der State nur lokal im GitHub Actions Runner liegt, weiss der nächste Pipeline-Lauf nichts mehr von der vorherigen Infrastruktur und würde neue Ressourcen erstellen.
+
+Für eine stabile Lösung sollte der Terraform State remote gespeichert werden, zum Beispiel in S3. Für eine vereinfachte Unterrichtsvariante kann die Pipeline eine kurzlebige Testumgebung erstellen, deployen, testen und am Ende wieder zerstören.
+
+Die Lösung hat dafür beim manuellen Start diesen Input:
+
+```text
+cleanup_after_test = true oder false
+```
+
+Wenn `cleanup_after_test=true` gewählt wird, führt die Pipeline nach dem Health Check `tofu destroy` aus.
+
+Wenn `cleanup_after_test=false` gewählt wird, bleibt die EC2-Instanz bestehen. Ohne Remote State kann ein späterer Pipeline-Lauf diese bestehende Instanz aber nicht mehr sauber weiterverwalten.
+
+### Abgabe
+
+Am Ende von Praxisauftrag 4 sollen vorhanden sein:
+
+- eine Pipeline mit Terraform/OpenTofu-Schritten
+- ein eigener Infrastrukturordner `infra/praxisauftrag-4`
+- AWS Credentials werden aus GitHub Secrets gelesen
+- `terraform output` oder `tofu output` wird in der Pipeline verwendet
+- die App wird ohne manuelles Eintragen der EC2-IP oder Host-Variables deployed
+- ein Health Check prüft das Deployment
 
 ## Bewertungsideen für Classroom
 
@@ -808,6 +908,17 @@ Mögliche Prüfpunkte für Praxisauftrag 3:
 - Pipeline enthält einen direkten Health Check
 - Pipeline kann optional den ALB Listener umschalten
 
+Mögliche Prüfpunkte für Praxisauftrag 4:
+
+- Pipeline enthält Terraform- oder OpenTofu-Setup
+- Pipeline führt `terraform init` aus
+- Pipeline führt `terraform apply` aus
+- Pipeline liest `terraform output -raw public_ip` oder `tofu output -raw public_ip`
+- Pipeline verwendet den Output als Deployment-Ziel
+- Pipeline benötigt keine manuell gesetzte Host-Variable
+- AWS Credentials kommen aus GitHub Secrets
+- Health Check ist vorhanden
+
 ## Aufräumen
 
 Vergesst nach dem Auftrag nicht, die AWS-Ressourcen wieder zu löschen:
@@ -831,5 +942,10 @@ Für Praxisauftrag 3 entsprechend:
 cd infra/praxisauftrag-3
 terraform destroy
 ```
+
+Für Praxisauftrag 4 hängt das Aufräumen von eurer Pipeline ab. Wenn die Pipeline Terraform ausführt, soll sie entweder:
+
+- am Ende `terraform destroy` ausführen, wenn es eine kurzlebige Testumgebung ist
+- oder den Terraform State remote speichern, wenn die Umgebung bestehen bleiben soll
 
 Prüft danach in der AWS Console, ob keine EC2-Instanz, kein EBS-Volume und keine unnötigen Security Groups weiterlaufen.
