@@ -586,7 +586,29 @@ http://<PA3_ALB_DNS_NAME>
 http://<PA3_ALB_DNS_NAME>/api/products
 ```
 
-Nehmt danach eine sichtbare Änderung in der App vor, zum Beispiel in einem Template oder Text auf der Startseite.
+Nehmt danach eine sichtbare Änderung in der App vor, damit ihr Blue und Green klar unterscheiden könnt.
+
+Empfohlene Teständerung: Ändert die Farbe der Navbar in `static/css/style.css`.
+
+Vorher:
+
+```css
+.navbar {
+  background-color: var(--ts-dark) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+}
+```
+
+Nachher:
+
+```css
+.navbar {
+  background-color: var(--ts-red) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+}
+```
+
+Damit ist die neue Version rot erkennbar, während die alte Version weiterhin dunkelblau ist.
 
 Wenn der ALB aktuell auf Blue zeigt, startet die Pipeline manuell mit:
 
