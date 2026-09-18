@@ -30,7 +30,13 @@ echo "    Path   : $REMOTE_DIR"
 echo ""
 
 echo "--> Preparing remote directories..."
-ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$REMOTE_DIR' /opt/techstyle/data && sudo chown -R '$EC2_USER':'$EC2_USER' /opt/techstyle"
+ssh "${SSH_OPTS[@]}" "$SERVER" "REMOTE_DIR='$REMOTE_DIR' EC2_USER='$EC2_USER' bash -s" << 'ENDSSH'
+  set -euo pipefail
+
+  mkdir -p "$REMOTE_DIR"
+  sudo mkdir -p /opt/techstyle/data
+  sudo chown -R "$EC2_USER:$EC2_USER" /opt/techstyle
+ENDSSH
 
 echo "--> Copying Docker deployment files..."
 scp "${SSH_OPTS[@]}" -r \
