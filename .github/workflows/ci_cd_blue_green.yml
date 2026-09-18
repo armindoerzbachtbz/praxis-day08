@@ -3,24 +3,29 @@ name: CI/CD Blue-Green Pipeline
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "Blue-green action"
+        required: true
+        default: "deploy_only"
+        type: choice
+        options:
+          - deploy_only
+          - deploy_and_switch
+          - switch_only
       deploy_target:
-        description: "Environment to deploy"
+        description: "Target environment"
         required: true
         default: "green"
         type: choice
         options:
           - blue
           - green
-      switch_traffic:
-        description: "Switch ALB traffic to the deployed environment after health check"
-        required: true
-        default: false
-        type: boolean
 
 jobs:
   lint:
     name: Code Quality (flake8)
     runs-on: ubuntu-latest
+    if: ${{ inputs.action != 'switch_only' }}
 
     steps:
       - name: Checkout
@@ -69,6 +74,7 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: test
+    if: ${{ inputs.action != 'switch_only' }}
 
     steps:
       - name: Checkout
@@ -93,9 +99,10 @@ jobs:
           exit 1
 
   deploy:
-    name: Deploy to ${{ inputs.deploy_target }}
+    name: ${{ inputs.action }} ${{ inputs.deploy_target }}
     runs-on: ubuntu-latest
     needs: docker-build
+    if: ${{ inputs.action != 'switch_only' }}
 
     steps:
       - name: Checkout
@@ -159,8 +166,27 @@ jobs:
           echo "$TARGET_COLOR health check failed"
           exit 1
 
+  switch:
+    name: Switch ALB to ${{ inputs.deploy_target }}
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ always() && (inputs.action == 'deploy_and_switch' || inputs.action == 'switch_only') && (inputs.action == 'switch_only' || needs.deploy.result == 'success') }}
+
+    steps:
+      - name: Select blue-green target
+        env:
+          DEPLOY_TARGET: ${{ inputs.deploy_target }}
+          BLUE_TARGET_GROUP_ARN: ${{ vars.PA3_BLUE_TARGET_GROUP_ARN }}
+          GREEN_TARGET_GROUP_ARN: ${{ vars.PA3_GREEN_TARGET_GROUP_ARN }}
+        run: |
+          if [ "$DEPLOY_TARGET" = "blue" ]; then
+            echo "TARGET_GROUP_ARN=$BLUE_TARGET_GROUP_ARN" >> "$GITHUB_ENV"
+          else
+            echo "TARGET_GROUP_ARN=$GREEN_TARGET_GROUP_ARN" >> "$GITHUB_ENV"
+          fi
+          echo "TARGET_COLOR=$DEPLOY_TARGET" >> "$GITHUB_ENV"
+
       - name: Configure AWS credentials for ALB switch
-        if: ${{ inputs.switch_traffic }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -169,7 +195,6 @@ jobs:
           aws-region: ${{ vars.PA3_AWS_REGION || 'us-east-1' }}
 
       - name: Switch ALB traffic
-        if: ${{ inputs.switch_traffic }}
         env:
           ALB_LISTENER_ARN: ${{ vars.PA3_ALB_LISTENER_ARN }}
         run: |
@@ -183,7 +208,6 @@ jobs:
           echo "ALB traffic switched to $TARGET_COLOR"
 
       - name: ALB health check
-        if: ${{ inputs.switch_traffic }}
         env:
           ALB_DNS_NAME: ${{ vars.PA3_ALB_DNS_NAME }}
         run: |

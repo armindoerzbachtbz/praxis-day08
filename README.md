@@ -552,20 +552,20 @@ Die Musterlösung liegt in:
 Beim manuellen Start wählt ihr:
 
 ```text
+action = deploy_only, deploy_and_switch oder switch_only
 deploy_target = blue oder green
-switch_traffic = true oder false
 ```
 
 Empfohlener Ablauf:
 
 ```text
 1. Aktuell zeigt der ALB auf Blue.
-2. Pipeline manuell starten mit deploy_target=green.
+2. Pipeline manuell starten mit action=deploy_only und deploy_target=green.
 3. Pipeline deployed die neue Version auf Green.
 4. Pipeline prüft Green direkt über Port 5001.
-5. Wenn alles funktioniert: switch_traffic=true setzen.
-6. Pipeline schaltet den ALB Listener auf Green.
-7. Bei Problemen kann wieder auf Blue zurückgeschaltet werden.
+5. Wenn alles funktioniert: action=switch_only und deploy_target=green.
+6. Pipeline schaltet den ALB Listener auf Green, ohne Green nochmals zu deployen.
+7. Bei Problemen: action=switch_only und deploy_target=blue.
 ```
 
 Grundregel:
@@ -588,7 +588,21 @@ http://<PA3_ALB_DNS_NAME>/api/products
 
 Nehmt danach eine sichtbare Änderung in der App vor, damit ihr Blue und Green klar unterscheiden könnt.
 
-Empfohlene Teständerung: Ändert die Farbe der Navbar in `static/css/style.css`.
+Empfohlene Teständerung: Ändert die Farbe der Navbar in `static/css/style.css` auf grün.
+
+Ergänzt zuerst bei den Brand-Farben eine grüne Variable:
+
+```css
+:root {
+  --ts-red:    #dc3545;
+  --ts-dark:   #1a1a2e;
+  --ts-mid:    #16213e;
+  --ts-accent: #e94560;
+  --ts-green:  #198754;
+}
+```
+
+Ändert danach die Navbar.
 
 Vorher:
 
@@ -603,18 +617,18 @@ Nachher:
 
 ```css
 .navbar {
-  background-color: var(--ts-red) !important;
+  background-color: var(--ts-green) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,.35);
 }
 ```
 
-Damit ist die neue Version rot erkennbar, während die alte Version weiterhin dunkelblau ist.
+Damit ist die Green-Version grün erkennbar, während die alte Blue-Version weiterhin dunkelblau ist.
 
 Wenn der ALB aktuell auf Blue zeigt, startet die Pipeline manuell mit:
 
 ```text
+action = deploy_only
 deploy_target = green
-switch_traffic = false
 ```
 
 Damit wird die neue Version auf Green deployed, aber der ALB bleibt noch auf Blue. Prüft Green direkt:
@@ -682,8 +696,8 @@ Diese Credentials müssen zu eurem aktuellen AWS Learner Lab passen.
 Startet danach die Pipeline mit:
 
 ```text
+action = deploy_and_switch
 deploy_target = green
-switch_traffic = true
 ```
 
 Die Pipeline macht dann automatisch:
@@ -698,40 +712,41 @@ Die Pipeline macht dann automatisch:
 Automatischen Rollback testen:
 
 ```text
+action = switch_only
 deploy_target = blue
-switch_traffic = true
 ```
 
-Danach sollte der ALB wieder auf Blue zeigen.
+Danach sollte der ALB wieder auf Blue zeigen. Wichtig: Bei `switch_only` wird Blue nicht neu deployed. Die ältere Version auf Blue bleibt erhalten.
 
 ### Erwarteter Ablauf
 
 ```mermaid
 flowchart TD
-    A[Workflow manuell starten] --> B{deploy_target}
-    B -->|blue| C[PA3_BLUE_EC2_HOST auswählen]
-    B -->|green| D[PA3_GREEN_EC2_HOST auswählen]
-    C --> E[Docker Compose Deploy]
-    D --> E[Docker Compose Deploy]
-    E --> F[Direkter Health Check auf Zielinstanz]
-    F --> G{switch_traffic?}
-    G -->|Nein| H[Deployment endet ohne Umschalten]
-    G -->|Ja| I[ALB Listener auf Ziel-Target-Group setzen]
+    A[Workflow manuell starten] --> B{action}
+    B -->|deploy_only| C[Zielinstanz auswählen]
+    B -->|deploy_and_switch| C
+    B -->|switch_only| H[Target Group auswählen]
+    C --> D[Docker Compose Deploy]
+    D --> E[Direkter Health Check auf Zielinstanz]
+    E --> F{action}
+    F -->|deploy_only| G[Deployment endet ohne Umschalten]
+    F -->|deploy_and_switch| H
+    H --> I[ALB Listener auf Ziel-Target-Group setzen]
     I --> J[Health Check über ALB]
     J --> K[Blue-Green Deployment erfolgreich]
 ```
 
 ### Rollback
 
-Rollback bedeutet: Pipeline erneut starten und auf die andere Farbe umschalten.
+Rollback bedeutet: ALB zurück auf die andere Farbe schalten, ohne diese Instanz neu zu deployen.
 
 Beispiel:
 
 ```text
 Aktuell live: green
 Rollback-Ziel: blue
+action=switch_only
 deploy_target=blue
-switch_traffic=true
 ```
 
 Wenn auf Blue bereits eine funktionierende ältere Version läuft, wird der ALB wieder auf Blue geschaltet.
