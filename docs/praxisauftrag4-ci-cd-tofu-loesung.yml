@@ -118,7 +118,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
-          # TODO: Der Public Key für Cloud-Init fehlt hier.
+          ssh-keygen -y -f ~/.ssh/ec2_key > /tmp/techstyle_ec2.pub
 
       - name: OpenTofu init
         working-directory: infra/praxisauftrag-4
@@ -128,7 +128,8 @@ jobs:
         working-directory: infra/praxisauftrag-4
         run: |
           tofu apply -auto-approve \
-            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}"
+            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -var="ssh_public_key_path=/tmp/techstyle_ec2.pub"
 
       - name: Read infrastructure outputs
         id: tofu_outputs
@@ -136,7 +137,7 @@ jobs:
         run: |
           EC2_HOST="$(tofu output -raw public_ip)"
           APP_URL="$(tofu output -raw app_url)"
-          # TODO: EC2_HOST wird nicht an spätere Schritte weitergegeben.
+          echo "ec2_host=$EC2_HOST" >> "$GITHUB_OUTPUT"
           echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
           echo "Provisioned EC2 host: $EC2_HOST"
           echo "App URL after deployment: $APP_URL"
@@ -162,7 +163,7 @@ jobs:
           EC2_HOST: ${{ steps.tofu_outputs.outputs.ec2_host }}
         run: |
           for i in {1..12}; do
-            if curl -fsS "http://$EC2_HOST/api/products" >/tmp/products.json; then
+            if curl -fsS "http://$EC2_HOST:5001/api/products" >/tmp/products.json; then
               python -m json.tool /tmp/products.json >/dev/null
               echo "Health check successful"
               exit 0

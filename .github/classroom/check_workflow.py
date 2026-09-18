@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -14,8 +15,10 @@ def find_root():
         p = p.parent
     return Path(__file__).resolve().parent
 
+
 ROOT = find_root()
-SONARQUBE_WORKFLOW = ROOT / ".github" / "workflows" / "build.yml"
+WORKFLOW_PATH = ROOT / ".github" / "workflows" / "ci_cd_tofu.yml"
+INFRA_DIR = ROOT / "infra" / "praxisauftrag-4"
 RESULTS_FILE = os.environ.get("CLASSROOM_RESULTS")
 
 PASS = 0
@@ -43,128 +46,125 @@ def check(description, condition, solution):
         FAIL += 1
 
 
-def load_workflow(path):
+def read_text(path):
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def load_yaml(path):
     if not path.exists():
         return {}
     with open(path, encoding="utf-8") as workflow_file:
         return yaml.load(workflow_file, Loader=yaml.BaseLoader) or {}
 
 
-def get_steps(workflow):
-    jobs = workflow.get("jobs", {})
-    build_job = jobs.get("build", {})
-    steps = build_job.get("steps", [])
-    return steps if isinstance(steps, list) else []
+def flatten_runs(workflow):
+    runs = []
+    for job in (workflow.get("jobs") or {}).values():
+        for step in job.get("steps", []) or []:
+            if isinstance(step, dict) and "run" in step:
+                runs.append(str(step["run"]))
+    return "\n".join(runs)
 
 
+def find_step_run(workflow, step_name):
+    for job in (workflow.get("jobs") or {}).values():
+        for step in job.get("steps", []) or []:
+            if isinstance(step, dict) and step.get("name") == step_name:
+                return str(step.get("run", ""))
+    return ""
 
-def check_sonarqube_workflow():
-    workflow_path = SONARQUBE_WORKFLOW
-    if not workflow_path.exists():
-        ci_path = ROOT / ".github" / "workflows" / "ci.yml"
-        if ci_path.exists():
-            workflow_path = ci_path
 
-    workflow_exists = workflow_path.exists()
+def check_praxisauftrag4():
+    workflow_exists = WORKFLOW_PATH.exists()
     check(
-        "Workflow-Datei (sonarqube.yml oder ci.yml) existiert",
+        "Workflow .github/workflows/ci_cd_tofu.yml existiert",
         workflow_exists,
-        "Erstelle die Datei .github/workflows/sonarqube.yml.",
+        "Erstelle oder repariere die Datei .github/workflows/ci_cd_tofu.yml.",
     )
 
-    if not workflow_exists:
-        workflow = {}
-        workflow_text = ""
-    else:
-        workflow = load_workflow(workflow_path)
-        workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = load_yaml(WORKFLOW_PATH)
+    workflow_text = read_text(WORKFLOW_PATH)
+    run_text = flatten_runs(workflow)
+    tofu_apply_run = find_step_run(workflow, "OpenTofu apply")
 
-    # 1. Trigger (push) und Branch (main) konfiguriert
-    on_config = workflow.get("on", {})
-    if isinstance(on_config, dict):
-        has_push = "push" in on_config
-    elif isinstance(on_config, list):
-        has_push = "push" in on_config
-    else:
-        has_push = "push" in workflow_text
-
-    has_main_branch = "main" in workflow_text
     check(
-        "Workflow-Trigger (push) und Branch (main) konfiguriert",
-        has_push and has_main_branch,
-        "Konfiguriere 'on: push' für den Branch main.",
+        "OpenTofu Setup Action wird verwendet",
+        "opentofu/setup-opentofu" in workflow_text,
+        "Nutze opentofu/setup-opentofu@v1, damit tofu in GitHub Actions verfügbar ist.",
     )
 
-    # 2. Job Definition auf ubuntu-latest
-    jobs = workflow.get("jobs", {})
-    has_jobs = isinstance(jobs, dict) and len(jobs) > 0
-    has_ubuntu = "ubuntu-latest" in workflow_text
     check(
-        "Job für SonarQube-Analyse auf ubuntu-latest definiert",
-        has_jobs and has_ubuntu,
-        "Definiere einen Job unter 'jobs:' mit 'runs-on: ubuntu-latest'.",
+        "OpenTofu init läuft im Ordner infra/praxisauftrag-4",
+        "working-directory: infra/praxisauftrag-4" in workflow_text and re.search(r"\btofu init\b", run_text),
+        "Führe tofu init mit working-directory: infra/praxisauftrag-4 aus.",
     )
 
-    # 3. Git Checkout mit fetch-depth: 0
-    has_checkout = "actions/checkout" in workflow_text
-    has_fetch_depth = "fetch-depth" in workflow_text and ("0" in workflow_text)
     check(
-        "Git-Checkout mit fetch-depth: 0 konfiguriert",
-        has_checkout and has_fetch_depth,
-        "Nutze actions/checkout mit 'fetch-depth: 0'.",
+        "OpenTofu apply wird automatisch ausgeführt",
+        "tofu apply -auto-approve" in run_text,
+        "Führe tofu apply -auto-approve in der Pipeline aus.",
     )
 
-    # 4. SonarSource/sonarqube-scan-action mit SONAR_TOKEN und SONAR_HOST_URL
-    has_scan_action = (
-        "SonarSource/sonarqube-scan-action" in workflow_text
-        or "sonarqube-scan-action" in workflow_text
-    )
-    has_sonar_token = "SONAR_TOKEN" in workflow_text
-    has_sonar_host_url = "SONAR_HOST_URL" in workflow_text
     check(
-        "SonarQube Scan Action mit SONAR_TOKEN und SONAR_HOST_URL konfiguriert",
-        has_scan_action and has_sonar_token and has_sonar_host_url,
-        "Verwende SonarSource/sonarqube-scan-action mit SONAR_TOKEN und SONAR_HOST_URL.",
+        "Public Key wird aus EC2_SSH_KEY abgeleitet",
+        "ssh-keygen -y -f ~/.ssh/ec2_key > /tmp/techstyle_ec2.pub" in run_text,
+        "Leite den Public Key mit ssh-keygen -y aus dem Private Key ab.",
     )
 
-    # 5. SonarSource/sonarqube-quality-gate-action konfiguriert
-    has_qg_action = (
-        "SonarSource/sonarqube-quality-gate-action" in workflow_text
-        or "sonarqube-quality-gate-action" in workflow_text
-    )
     check(
-        "SonarQube Quality Gate Action konfiguriert",
-        has_qg_action,
-        "Verwende SonarSource/sonarqube-quality-gate-action im Workflow.",
+        "ssh_public_key_path wird an OpenTofu apply übergeben",
+        '-var="ssh_public_key_path=/tmp/techstyle_ec2.pub"' in tofu_apply_run,
+        "Übergib -var=\"ssh_public_key_path=/tmp/techstyle_ec2.pub\" an tofu apply.",
     )
 
-    # 6. File sonar-project.properties im Repo-Root existiert
-    sonar_props_file = ROOT / "sonar-project.properties"
-    props_exists = sonar_props_file.exists()
     check(
-        "Datei sonar-project.properties existiert im Repo-Root",
-        props_exists,
-        "Erstelle die Datei sonar-project.properties im Projekt-Root-Verzeichnis.",
+        "EC2 Public IP wird aus tofu output gelesen",
+        "tofu output -raw public_ip" in run_text,
+        "Lies die EC2-IP mit tofu output -raw public_ip aus.",
     )
 
-    # 7. sonar-project.properties enthält richtigem Inhalt (sonar.projectKey=techstyle)
-    props_valid = False
-    if props_exists:
-        props_content = sonar_props_file.read_text(encoding="utf-8")
-        props_valid = "sonar.projectKey=techstyle" in props_content
     check(
-        "sonar-project.properties enthält sonar.projectKey=techstyle",
-        props_valid,
-        "Stelle sicher, dass sonar-project.properties den Eintrag 'sonar.projectKey=techstyle' enthält.",
+        "EC2 Host wird an spätere Steps weitergegeben",
+        'echo "ec2_host=$EC2_HOST" >> "$GITHUB_OUTPUT"' in run_text
+        or 'echo "EC2_HOST=$EC2_HOST" >> "$GITHUB_ENV"' in run_text,
+        "Schreibe EC2_HOST nach GITHUB_OUTPUT oder GITHUB_ENV, damit spätere Steps ihn verwenden können.",
     )
-    
+
+    check(
+        "Deploy-Script deploy_docker.sh wird ausgeführt",
+        "./deploy_docker.sh" in run_text,
+        "Starte nach tofu apply das Docker Deployment mit ./deploy_docker.sh.",
+    )
+
+    check(
+        "Health Check verwendet Port 5001 und /api/products",
+        "http://$EC2_HOST:5001/api/products" in run_text
+        or "http://${EC2_HOST}:5001/api/products" in run_text,
+        "Prüfe die App über http://$EC2_HOST:5001/api/products.",
+    )
+
+    check(
+        "infra/praxisauftrag-4 ist vorhanden",
+        INFRA_DIR.exists() and (INFRA_DIR / "main.tf").exists(),
+        "Lege den Infrastrukturordner infra/praxisauftrag-4 mit main.tf an.",
+    )
+
+    main_tf = read_text(INFRA_DIR / "main.tf")
+    variables_tf = read_text(INFRA_DIR / "variables.tf")
+    check(
+        "Terraform-Konfiguration definiert ssh_public_key_path",
+        "ssh_public_key_path" in variables_tf and "ssh_authorized_key" in main_tf,
+        "Die Infrastruktur muss den Public Key per Cloud-Init an die EC2-Instanz übergeben.",
+    )
 
 
 def main():
     if RESULTS_FILE:
         Path(RESULTS_FILE).write_text("", encoding="utf-8")
 
-    check_sonarqube_workflow()
+    check_praxisauftrag4()
 
     print("")
     print("-----------------------------------------")

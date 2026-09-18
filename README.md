@@ -776,7 +776,13 @@ PA3_ALB_DNS_NAME
 
 ### Aufgabe
 
-Erstellt oder erweitert eine Pipeline, die Terraform integriert.
+In diesem Auftrag bekommt ihr eine fast fertige, aber bewusst fehlerhafte Pipeline:
+
+```text
+.github/workflows/ci_cd_tofu.yml
+```
+
+Analysiert die Pipeline-Logs, findet die Ursachen und repariert die Pipeline.
 
 Die dazugehörige Infrastruktur liegt in:
 
@@ -796,7 +802,7 @@ Die Pipeline soll:
 8. Danach die App deployen.
 9. Einen Health Check ausführen.
 
-Die Lösung verwendet OpenTofu:
+Die Ziel-Lösung verwendet OpenTofu:
 
 ```bash
 tofu init
@@ -811,6 +817,36 @@ EC2_HOST=$(tofu output -raw public_ip)
 ```
 
 Danach muss die IP nicht mehr manuell in GitHub aktualisiert werden. Die Pipeline setzt `EC2_HOST` intern aus dem Terraform/OpenTofu Output.
+
+### Fehleranalyse
+
+In der Starter-Pipeline sind typische Praxisfehler eingebaut.
+
+Findet und behebt diese Probleme:
+
+1. Der Public Key für Cloud-Init wird nicht aus dem Private Key erzeugt.
+2. `ssh_public_key_path` wird nicht korrekt an `tofu apply` übergeben.
+3. Die mit `tofu output` gelesene EC2-IP wird nicht an spätere Pipeline-Schritte weitergegeben.
+4. Der Health Check prüft den falschen Port.
+
+Typische Symptome in den Pipeline-Logs:
+
+```text
+ssh_public_key_path: no value for required variable
+no file exists at /tmp/techstyle_ec2.pub
+ssh-keyscan: missing host
+curl: Failed to connect
+Health check failed
+```
+
+Dokumentiert kurz, welchen Fehler ihr gefunden habt und welche Zeile ihr geändert habt.
+
+Das Autograding prüft unter anderem, ob:
+
+- der Public Key mit `ssh-keygen -y` aus `EC2_SSH_KEY` erzeugt wird
+- `ssh_public_key_path` an `tofu apply` übergeben wird
+- `tofu output -raw public_ip` an spätere Steps weitergegeben wird
+- der Health Check Port `5001` und `/api/products` verwendet
 
 ### GitHub Secrets
 
@@ -875,49 +911,6 @@ Am Ende von Praxisauftrag 4 sollen vorhanden sein:
 - die App wird ohne manuelles Eintragen der EC2-IP oder Host-Variables deployed
 - ein Health Check prüft das Deployment
 
-## Bewertungsideen für Classroom
-
-Mögliche Prüfpunkte für Praxisauftrag 1:
-
-- `.github/workflows/ci_cd.yml` existiert
-- Pipeline enthält Tests
-- Pipeline verwendet SSH
-- Pipeline verwendet `deploy.sh`
-- Pipeline verwendet GitHub Secrets oder Variables
-- Seed-Daten werden nicht bei jedem Deployment destruktiv neu geladen
-- Health Check ist vorhanden
-
-Mögliche Prüfpunkte für Praxisauftrag 2:
-
-- `Dockerfile` existiert
-- `docker-compose.yml` existiert
-- Pipeline baut oder startet Docker Compose
-- Gunicorn wird verwendet
-- produktiver Start verwendet nicht `python app.py`
-- persistenter Datenbankpfad oder Volume vorhanden
-- Health Check ist vorhanden
-
-Mögliche Prüfpunkte für Praxisauftrag 3:
-
-- `infra/praxisauftrag-3` existiert
-- Terraform erstellt zwei EC2-Instanzen
-- Terraform erstellt einen Application Load Balancer
-- Terraform erstellt zwei Target Groups
-- Pipeline enthält `deploy_target` mit `blue` und `green`
-- Pipeline kann gezielt auf Blue oder Green deployen
-- Pipeline enthält einen direkten Health Check
-- Pipeline kann optional den ALB Listener umschalten
-
-Mögliche Prüfpunkte für Praxisauftrag 4:
-
-- Pipeline enthält Terraform- oder OpenTofu-Setup
-- Pipeline führt `terraform init` aus
-- Pipeline führt `terraform apply` aus
-- Pipeline liest `terraform output -raw public_ip` oder `tofu output -raw public_ip`
-- Pipeline verwendet den Output als Deployment-Ziel
-- Pipeline benötigt keine manuell gesetzte Host-Variable
-- AWS Credentials kommen aus GitHub Secrets
-- Health Check ist vorhanden
 
 ## Aufräumen
 
