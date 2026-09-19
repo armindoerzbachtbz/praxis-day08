@@ -150,10 +150,16 @@ jobs:
           chmod +x deploy_docker.sh
           ./deploy_docker.sh
 
-      - name: Direct health check
+      - name: Direct health check on target instance
+        env:
+          EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
+          KEY_PATH: /home/runner/.ssh/ec2_key
         run: |
+          SERVER="$EC2_USER@$EC2_HOST"
+
           for i in {1..12}; do
-            if curl -fsS "http://$EC2_HOST:5001/api/products" >/tmp/products.json; then
+            if ssh -i "$KEY_PATH" -o StrictHostKeyChecking=accept-new "$SERVER" \
+              "curl -fsS http://localhost:5001/api/products" >/tmp/products.json; then
               python -m json.tool /tmp/products.json >/dev/null
               echo "$TARGET_COLOR environment is healthy"
               exit 0
