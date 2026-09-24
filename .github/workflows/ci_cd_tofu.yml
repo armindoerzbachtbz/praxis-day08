@@ -118,7 +118,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
-          # TODO: Der Public Key für Cloud-Init fehlt hier.
+          ssh-keygen -y -f ~/.ssh/ec2_key > /tmp/techstyle_ec2.pub
 
       - name: OpenTofu init
         working-directory: infra/praxisauftrag-4
