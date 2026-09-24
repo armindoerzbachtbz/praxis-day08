@@ -165,7 +165,7 @@ jobs:
           EC2_HOST: ${{ steps.tofu_outputs.outputs.ec2_host }}
         run: |
           for i in {1..12}; do
-            if curl -fsS "http://$EC2_HOST/api/products" >/tmp/products.json; then
+            if curl -fsS "http://$EC2_HOST:5001/api/products" >/tmp/products.json; then
               python -m json.tool /tmp/products.json >/dev/null
               echo "Health check successful"
               exit 0
