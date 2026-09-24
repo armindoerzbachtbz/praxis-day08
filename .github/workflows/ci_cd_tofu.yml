@@ -183,3 +183,4 @@ jobs:
           tofu destroy -auto-approve \
             -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" \
             -var="ssh_public_key_path=/tmp/techstyle_ec2.pub"
+
