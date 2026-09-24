@@ -146,6 +146,8 @@ jobs:
         env:
           EC2_HOST: ${{ steps.tofu_outputs.outputs.ec2_host }}
         run: |
+          echo "Adding $EC2_HOST to known_hosts" 
+          mkdir -p ~/.ssh
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy Docker Compose application
