@@ -128,7 +128,7 @@ jobs:
         working-directory: infra/praxisauftrag-4
         run: |
           tofu apply -auto-approve \
-            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}"
+            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" \
             -var="ssh_public_key_path=/tmp/techstyle_ec2.pub"
 
       - name: Read infrastructure outputs
